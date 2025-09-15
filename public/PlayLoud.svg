@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="256" height="256">
+  <defs>
+    <linearGradient id="red" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF3B30"/>
+      <stop offset="100%" stop-color="#FF453A"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#007AFF"/>
+      <stop offset="100%" stop-color="#0A84FF"/>
+    </linearGradient>
+    <linearGradient id="yellow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD60A"/>
+      <stop offset="100%" stop-color="#FFCC00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Top red arch -->
+  <path d="M120 100 
+           Q256 -20 392 100 
+           L392 160 
+           Q256 40 120 160 
+           Z"
+        fill="url(#red)" />
+
+  <!-- Left blue note with rounded bottom -->
+  <path d="M120 160 
+           L120 340 
+           A90 90 0 1 0 210 430 
+           L210 200 Z"
+        fill="url(#blue)" />
+
+  <!-- Right yellow note with rounded bottom -->
+  <path d="M392 160 
+           L392 340 
+           A90 90 0 1 0 482 430 
+           L482 200 Z"
+        fill="url(#yellow)" />
+
+  <!-- Inner blue curved arch -->
+  <path d="M120 160 
+           Q256 60 392 160 
+           L392 200 
+           Q256 100 120 200 
+           Z"
+        fill="url(#blue)" />
+</svg>
