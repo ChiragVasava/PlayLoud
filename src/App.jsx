@@ -25,7 +25,7 @@ import Premium from './components/pages/Premium';
 import Modal from './components/ui/Modal';
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = React.useState(true);
+  const [isAuthenticated, setIsAuthenticated] = React.useState(authService.isLoggedIn());
 
   React.useEffect(() => {
     const handleAuthChange = () => {
