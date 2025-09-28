@@ -1,165 +1,233 @@
 // utils/auth.js
-const MOCK_USERS = JSON.parse(import.meta.env.VITE_MOCK_USERS || '[]');
-const MOCK_ADMIN = JSON.parse(import.meta.env.VITE_MOCK_ADMIN || '{}');
+import { account, ID } from '../lib/appwrite';
 
 class AuthService {
   constructor() {
     this.currentUser = null;
-    this.isAuthenticated = false;
-    this.loadFromStorage();
+    this.isInitialized = false;
   }
 
-  loadFromStorage() {
-    const storedUser = localStorage.getItem('playloud_user');
-    const storedAuth = localStorage.getItem('playloud_auth');
-
-    if (storedUser && storedAuth === 'true') {
-      this.currentUser = JSON.parse(storedUser);
-      this.isAuthenticated = true;
-    }
-  }
-
-  saveToStorage() {
-    if (this.currentUser) {
-      localStorage.setItem('playloud_user', JSON.stringify(this.currentUser));
+  // Initialize auth state on page load
+  async initializeAuth() {
+    if (this.isInitialized) return;
+    
+    try {
+      const user = await account.get();
+      this.currentUser = user;
+      localStorage.setItem('playloud_user', JSON.stringify(user));
       localStorage.setItem('playloud_auth', 'true');
-    } else {
+    } catch (error) {
+      // User is not logged in
+      this.currentUser = null;
       localStorage.removeItem('playloud_user');
       localStorage.removeItem('playloud_auth');
+    } finally {
+      this.isInitialized = true;
     }
-
-    // Dispatch custom event to notify other components of auth state change
-    window.dispatchEvent(new CustomEvent('authChange'));
   }
 
+  // Login method
   async login(email, password) {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Create email/password session
+      await account.createEmailPasswordSession({
+        email,
+        password
+      });
 
-    // Check admin credentials first
-    if (MOCK_ADMIN.email === email && MOCK_ADMIN.password === password) {
-      if (!MOCK_ADMIN.isActive) {
-        throw new Error('Account is deactivated');
-      }
+      // Get user data
+      const user = await account.get();
+      
+      // Store user data
+      this.currentUser = user;
+      localStorage.setItem('playloud_user', JSON.stringify(user));
+      localStorage.setItem('playloud_auth', 'true');
 
-      this.currentUser = {
-        id: MOCK_ADMIN.id,
-        username: MOCK_ADMIN.username,
-        email: MOCK_ADMIN.email,
-        name: MOCK_ADMIN.name,
-        avatar: MOCK_ADMIN.avatar,
-        role: MOCK_ADMIN.role,
-        createdAt: MOCK_ADMIN.createdAt
-      };
+      // Dispatch auth change event
+      window.dispatchEvent(new CustomEvent('authChange'));
 
-      this.isAuthenticated = true;
-      this.saveToStorage();
+      return user;
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
 
+  // Signup method
+  async signup({ email, password, name, username }) {
+    try {
+      // Create user account
+      await account.create({
+        userId: ID.unique(),
+        email,
+        password,
+        name: name || username
+      });
+
+      // Automatically log in after signup
+      return await this.login(email, password);
+    } catch (error) {
+      console.error('Signup failed:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
+  // Logout method
+  async logout() {
+    try {
+      // Delete current session
+      await account.deleteSession('current');
+      
+      // Clear local data
+      this.currentUser = null;
+      localStorage.removeItem('playloud_user');
+      localStorage.removeItem('playloud_auth');
+
+      // Dispatch auth change event
+      window.dispatchEvent(new CustomEvent('authChange'));
+
+      return true;
+    } catch (error) {
+      console.error('Logout failed:', error);
+      // Even if logout fails on server, clear local data
+      this.currentUser = null;
+      localStorage.removeItem('playloud_user');
+      localStorage.removeItem('playloud_auth');
+      window.dispatchEvent(new CustomEvent('authChange'));
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
+  // Check if user is logged in
+  isLoggedIn() {
+    return localStorage.getItem('playloud_auth') === 'true' && this.currentUser !== null;
+  }
+
+  // Get current user
+  getCurrentUser() {
+    if (this.currentUser) {
       return this.currentUser;
     }
-
-    // Find regular user by email
-    const user = MOCK_USERS.find(u => u.email === email && u.password === password);
-
-    if (!user) {
-      throw new Error('Invalid email or password');
+    
+    const storedUser = localStorage.getItem('playloud_user');
+    if (storedUser) {
+      try {
+        this.currentUser = JSON.parse(storedUser);
+        return this.currentUser;
+      } catch (error) {
+        console.error('Error parsing stored user:', error);
+        localStorage.removeItem('playloud_user');
+      }
     }
-
-    if (!user.isActive) {
-      throw new Error('Account is deactivated');
-    }
-
-    this.currentUser = {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      name: user.name,
-      avatar: user.avatar,
-      createdAt: user.createdAt
-    };
-
-    this.isAuthenticated = true;
-    this.saveToStorage();
-
-    return this.currentUser;
+    
+    return null;
   }
 
-  async signup(userData) {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Check if user already exists
-    const existingUser = MOCK_USERS.find(u => u.email === userData.email || u.username === userData.username);
-    if (existingUser) {
-      throw new Error('User with this email or username already exists');
+  // Update user profile
+  async updateProfile(data) {
+    try {
+      const updatedUser = await account.updateName(data.name);
+      this.currentUser = { ...this.currentUser, ...updatedUser };
+      localStorage.setItem('playloud_user', JSON.stringify(this.currentUser));
+      window.dispatchEvent(new CustomEvent('authChange'));
+      return this.currentUser;
+    } catch (error) {
+      console.error('Profile update failed:', error);
+      throw new Error(this.getErrorMessage(error));
     }
-
-    // Create new user
-    const newUser = {
-      id: Math.max(...MOCK_USERS.map(u => u.id), 0) + 1,
-      username: userData.username,
-      email: userData.email,
-      password: userData.password,
-      name: userData.name,
-      avatar: userData.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData.name)}&background=random`,
-      createdAt: new Date().toISOString(),
-      isActive: true
-    };
-
-    MOCK_USERS.push(newUser);
-
-    this.currentUser = {
-      id: newUser.id,
-      username: newUser.username,
-      email: newUser.email,
-      name: newUser.name,
-      avatar: newUser.avatar,
-      createdAt: newUser.createdAt
-    };
-
-    this.isAuthenticated = true;
-    this.saveToStorage();
-
-    return this.currentUser;
   }
 
+  // Update email
+  async updateEmail(email, password) {
+    try {
+      await account.updateEmail(email, password);
+      // Refresh user data
+      const user = await account.get();
+      this.currentUser = user;
+      localStorage.setItem('playloud_user', JSON.stringify(user));
+      window.dispatchEvent(new CustomEvent('authChange'));
+      return user;
+    } catch (error) {
+      console.error('Email update failed:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
+  // Update password
+  async updatePassword(newPassword, currentPassword) {
+    try {
+      await account.updatePassword(newPassword, currentPassword);
+      return true;
+    } catch (error) {
+      console.error('Password update failed:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
+  // Send password recovery email
   async forgotPassword(email) {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Check if user exists
-    const user = MOCK_USERS.find(u => u.email === email);
-    if (!user) {
-      throw new Error('No account found with this email address');
+    try {
+      await account.createRecovery(
+        email,
+        `${window.location.origin}/reset-password` // Your reset password URL
+      );
+      return true;
+    } catch (error) {
+      console.error('Password recovery failed:', error);
+      throw new Error(this.getErrorMessage(error));
     }
-
-    // In a real app, this would send a reset email
-    console.log(`Password reset link sent to ${email}`);
-    return { success: true, message: 'Password reset link sent to your email' };
   }
 
-  logout() {
-    this.currentUser = null;
-    this.isAuthenticated = false;
-    localStorage.removeItem('playloud_user');
-    localStorage.removeItem('playloud_auth');
+  // Complete password recovery
+  async resetPassword(userId, secret, password) {
+    try {
+      await account.updateRecovery(userId, secret, password);
+      return true;
+    } catch (error) {
+      console.error('Password reset failed:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
   }
 
-  getCurrentUser() {
-    return this.currentUser;
+  // Get user sessions
+  async getSessions() {
+    try {
+      return await account.listSessions();
+    } catch (error) {
+      console.error('Failed to get sessions:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
   }
 
-  isLoggedIn() {
-    return this.isAuthenticated;
+  // Delete specific session
+  async deleteSession(sessionId) {
+    try {
+      await account.deleteSession(sessionId);
+      return true;
+    } catch (error) {
+      console.error('Failed to delete session:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
   }
 
-  // Admin check
-  isAdmin() {
-    return this.currentUser && this.currentUser.role === 'admin';
+  // Convert Appwrite errors to user-friendly messages
+  getErrorMessage(error) {
+    const errorMessages = {
+      'user_invalid_credentials': 'Invalid email or password',
+      'user_not_found': 'No account found with this email',
+      'user_already_exists': 'An account with this email already exists',
+      'user_email_already_exists': 'This email is already registered',
+      'user_password_mismatch': 'Current password is incorrect',
+      'general_argument_invalid': 'Please check your input and try again',
+      'general_rate_limit_exceeded': 'Too many requests. Please try again later',
+      'user_session_not_found': 'Your session has expired. Please log in again',
+    };
+
+    const errorType = error?.type || error?.code;
+    return errorMessages[errorType] || error?.message || 'An unexpected error occurred';
   }
 }
 
-// Create singleton instance
+// Create a single instance
 const authService = new AuthService();
-
 export default authService;

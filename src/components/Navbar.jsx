@@ -75,7 +75,6 @@ const Navbar = () => {
       setIsLoggedIn(false);
       setCurrentUser(null);
       setIsProfileOpen(false);
-      navigate('/login');
       console.log('User logged out');
     }
   };
