@@ -21,8 +21,10 @@ import RecentlyPlayed from './components/pages/RecentlyPlayed';
 import Library from './components/pages/Library';
 import AllPlaylists from './components/pages/AllPlaylists';
 import Premium from './components/pages/Premium';
-import Modal from './components/ui/Modal';
+// import Modal from './components/ui/Modal';
 import authService from './utils/auth';
+import AuthSuccess from './components/auth/AuthSuccess';
+import AuthFailure from './components/auth/AuthFailure';
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
@@ -99,7 +101,7 @@ const App = () => {
         <div className="text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-green-400 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-white animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
             </svg>
           </div>
           <div className="flex items-center space-x-2 text-gray-400">
@@ -115,26 +117,34 @@ const App = () => {
     <Router>
       <Routes>
         {/* Auth Routes */}
-        <Route 
-          path="/login" 
-          element={!isAuthenticated ? 
-            <LoginForm setIsAuthenticated={setIsAuthenticated} /> : 
+        <Route
+          path="/login"
+          element={!isAuthenticated ?
+            <LoginForm setIsAuthenticated={setIsAuthenticated} /> :
             <Navigate to="/" />
-          } 
+          }
         />
-        <Route 
-          path="/signup" 
-          element={!isAuthenticated ? 
-            <SignupForm setIsAuthenticated={setIsAuthenticated} /> : 
+        <Route
+          path="/signup"
+          element={!isAuthenticated ?
+            <SignupForm setIsAuthenticated={setIsAuthenticated} /> :
             <Navigate to="/" />
-          } 
+          }
         />
-        <Route 
-          path="/forgot-password" 
-          element={!isAuthenticated ? 
-            <ForgotPasswordForm /> : 
+        <Route
+          path="/forgot-password"
+          element={!isAuthenticated ?
+            <ForgotPasswordForm /> :
             <Navigate to="/" />
-          } 
+          }
+        />
+        <Route
+          path="/auth/success"
+          element={<AuthSuccess setIsAuthenticated={setIsAuthenticated} />}
+        />
+        <Route
+          path="/auth/failure"
+          element={<AuthFailure />}
         />
 
         <Route

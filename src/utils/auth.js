@@ -10,7 +10,7 @@ class AuthService {
   // Initialize auth state on page load
   async initializeAuth() {
     if (this.isInitialized) return;
-    
+
     try {
       const user = await account.get();
       this.currentUser = user;
@@ -29,15 +29,20 @@ class AuthService {
   // Login method
   async login(email, password) {
     try {
+      // Check if a session already exists and delete it to ensure a clean login.
+      try {
+        await account.getSession('current');
+        await account.deleteSession('current');
+      } catch (error) {
+        // No session found, which is fine. Proceed with login.
+      }
+
       // Create email/password session
-      await account.createEmailPasswordSession({
-        email,
-        password
-      });
+      await account.createEmailPasswordSession(email, password);
 
       // Get user data
       const user = await account.get();
-      
+
       // Store user data
       this.currentUser = user;
       localStorage.setItem('playloud_user', JSON.stringify(user));
@@ -77,7 +82,7 @@ class AuthService {
     try {
       // Delete current session
       await account.deleteSession('current');
-      
+
       // Clear local data
       this.currentUser = null;
       localStorage.removeItem('playloud_user');
@@ -108,7 +113,7 @@ class AuthService {
     if (this.currentUser) {
       return this.currentUser;
     }
-    
+
     const storedUser = localStorage.getItem('playloud_user');
     if (storedUser) {
       try {
@@ -119,7 +124,7 @@ class AuthService {
         localStorage.removeItem('playloud_user');
       }
     }
-    
+
     return null;
   }
 
@@ -226,8 +231,26 @@ class AuthService {
     const errorType = error?.type || error?.code;
     return errorMessages[errorType] || error?.message || 'An unexpected error occurred';
   }
+
+  // OAuth2 Login
+  async loginWithOAuth2(provider) {
+    try {
+      // The createOAuth2Session method handles the redirect to the provider.
+      // After authentication, the user will be redirected back to your app.
+      // The success URL should handle the session creation.
+      account.createOAuth2Session(
+        provider,
+        `${window.location.origin}/`, // Success URL
+        `${window.location.origin}/login` // Failure URL
+      );
+    } catch (error) {
+      console.error('OAuth2 login failed:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
 }
 
 // Create a single instance
 const authService = new AuthService();
+
 export default authService;

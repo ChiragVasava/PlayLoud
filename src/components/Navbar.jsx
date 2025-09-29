@@ -178,7 +178,7 @@ const Navbar = () => {
                   className="flex items-center space-x-1.5 p-1 rounded-full hover:bg-gray-700/50 transition-all duration-200 group"
                 >
                   <img
-                    src={currentUser?.avatar || "https://avatars.githubusercontent.com/u/149458923?s=96&v=4"}
+                    src={currentUser?.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png"}
                     alt="Profile"
                     className="w-7 h-7 rounded-full border-2 border-green-500 group-hover:border-green-400 transition-colors"
                   />
@@ -201,13 +201,15 @@ const Navbar = () => {
                   <div className="px-3 py-2 border-b border-gray-700">
                     <div className="flex items-center space-x-2">
                       <img
-                        src={currentUser?.avatar || "https://avatars.githubusercontent.com/u/149458923?s=96&v=4"}
+                        // src={profileData.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png"}
+                        // alt="Profile"
+                        src={currentUser.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png"}
                         alt="Profile"
                         className="w-9 h-9 rounded-full border-2 border-green-500"
                       />
                       <div>
-                        <p className="text-white font-medium text-sm">{currentUser?.name || "John Doe"}</p>
-                        <p className="text-gray-400 text-xs">{currentUser?.email || "john.doe@email.com"}</p>
+                        <p className="text-white font-medium text-sm">{currentUser?.name || "Username"}</p>
+                        <p className="text-gray-400 text-xs">{currentUser?.email || "UserEmailID"}</p>
                       </div>
                     </div>
                   </div>
