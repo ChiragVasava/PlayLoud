@@ -1,14 +1,12 @@
-// App.jsx (updated with Appwrite integration)
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+// App.jsx (updated with Combined Search and Browse)
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import HomePage from './components/HomePage';
-import BrowsePage from './components/pages/BrowsePage';
 import SearchPage from './components/pages/SearchPage';
 import PlaylistPage from './components/pages/PlaylistPage';
 import SongPage from './components/pages/SongPage';
-import GenrePage from './components/pages/GenrePage';
 import MusicPlayer from './components/MusicPlayer';
 import Footer from './components/Footer';
 import LoginForm from './components/auth/LoginForm';
@@ -21,10 +19,28 @@ import RecentlyPlayed from './components/pages/RecentlyPlayed';
 import Library from './components/pages/Library';
 import AllPlaylists from './components/pages/AllPlaylists';
 import Premium from './components/pages/Premium';
-// import Modal from './components/ui/Modal';
 import authService from './utils/auth';
 import AuthSuccess from './components/auth/AuthSuccess';
 import AuthFailure from './components/auth/AuthFailure';
+
+// Genre Redirect Component
+const GenreRedirect = () => {
+  const { genre } = useParams();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    navigate(`/search?q=${encodeURIComponent(genre)}`);
+  }, [genre, navigate]);
+  
+  return (
+    <div className="flex items-center justify-center min-h-96">
+      <div className="text-center">
+        <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-400">Redirecting...</p>
+      </div>
+    </div>
+  );
+};
 
 const App = () => {
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
@@ -35,6 +51,13 @@ const App = () => {
     const initializeApp = async () => {
       try {
         await authService.initializeAuth();
+
+        // Check if this is an OAuth2 callback (user just logged in with Google)
+        if (window.location.href.includes('success=true') || window.location.href.includes('oauth')) {
+          const appwriteAuth = (await import('./utils/appwriteAuth')).default;
+          await appwriteAuth.handleOAuth2Success();
+        }
+
         setIsAuthenticated(authService.isLoggedIn());
       } catch (error) {
         console.error('Failed to initialize auth:', error);
@@ -64,7 +87,7 @@ const App = () => {
         case 'likedSongs': navigate('/liked-songs'); break;
         case 'recentlyPlayed': navigate('/recently-played'); break;
         case 'library': navigate('/library'); break;
-        case 'browse': navigate('/browse'); break;
+        case 'browse': navigate('/search'); break; // Redirect browse to search
         case 'profile': navigate('/profile'); break;
         case 'createPlaylist': navigate('/create-playlist'); break;
         case 'allPlaylists': navigate('/all-playlists'); break;
@@ -87,9 +110,9 @@ const App = () => {
           </div>
         </main>
         <div className="fixed bottom-0 left-0 right-0 z-50">
-          <Footer />
           <MusicPlayer />
         </div>
+        <Footer />
       </div>
     );
   };
@@ -150,27 +173,41 @@ const App = () => {
         <Route
           path="/*"
           element={
-            isAuthenticated ? (
-              <MainLayout>
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/browse" element={<BrowsePage />} />
-                  <Route path="/search" element={<SearchPage />} />
-                  <Route path="/library" element={<Library />} />
-                  <Route path="/liked-songs" element={<LikedSongs />} />
-                  <Route path="/recently-played" element={<RecentlyPlayed />} />
-                  <Route path="/all-playlists" element={<AllPlaylists />} />
-                  <Route path="/playlist/:id" element={<PlaylistPage />} />
-                  <Route path="/song/:id" element={<SongPage />} />
-                  <Route path="/genre/:genre" element={<GenrePage />} />
-                  <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/create-playlist" element={<CreatePlaylist />} />
-                  <Route path="/premium" element={<Premium />} />
-                </Routes>
-              </MainLayout>
-            ) : (
-              <Navigate to="/login" />
-            )
+            <MainLayout>
+              <Routes>
+                {/* Main Routes - Available to all users */}
+                <Route path="/" element={<HomePage />} />
+                <Route path="/browse" element={<Navigate to="/search" />} /> {/* Redirect to search */}
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/genre/:genre" element={<GenreRedirect />} />
+                <Route path="/playlist/:id" element={<PlaylistPage />} />
+                <Route path="/song/:id" element={<SongPage />} />
+                
+                {/* Routes that require authentication */}
+                {isAuthenticated ? (
+                  <>
+                    <Route path="/library" element={<Library />} />
+                    <Route path="/liked-songs" element={<LikedSongs />} />
+                    <Route path="/recently-played" element={<RecentlyPlayed />} />
+                    <Route path="/all-playlists" element={<AllPlaylists />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/create-playlist" element={<CreatePlaylist />} />
+                    <Route path="/premium" element={<Premium />} />
+                  </>
+                ) : (
+                  // Redirect to login if trying to access protected routes
+                  <>
+                    <Route path="/library" element={<Navigate to="/login" />} />
+                    <Route path="/liked-songs" element={<Navigate to="/login" />} />
+                    <Route path="/recently-played" element={<Navigate to="/login" />} />
+                    <Route path="/all-playlists" element={<Navigate to="/login" />} />
+                    <Route path="/profile" element={<Navigate to="/login" />} />
+                    <Route path="/create-playlist" element={<Navigate to="/login" />} />
+                    <Route path="/premium" element={<Navigate to="/login" />} />
+                  </>
+                )}
+              </Routes>
+            </MainLayout>
           }
         />
       </Routes>

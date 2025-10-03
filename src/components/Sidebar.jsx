@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PlusIcon } from '@heroicons/react/24/outline';
-import Modal from './ui/Modal';
 import Button from './ui/Button';
 
 const Sidebar = ({ onSidebarToggle }) => {
@@ -60,15 +59,14 @@ const Sidebar = ({ onSidebarToggle }) => {
       id: 'Expand',
       label: isSidebarExpanded ? 'Collapse' : 'Expand',
       icon: (
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          fill="none" 
-          viewBox="0 0 24 24" 
-          strokeWidth="1.5" 
-          stroke="currentColor" 
-          className={`w-4 h-4 transition-transform duration-300 ease-in-out ${
-            isSidebarExpanded ? 'rotate-180' : 'rotate-0'
-          }`}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth="1.5"
+          stroke="currentColor"
+          className={`w-4 h-4 transition-transform duration-300 ease-in-out ${isSidebarExpanded ? 'rotate-180' : 'rotate-0'
+            }`}
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
         </svg>
@@ -243,10 +241,9 @@ const Sidebar = ({ onSidebarToggle }) => {
       </aside>
 
       {/* Mobile/Tablet Sidebar - Now responsive width */}
-      <aside 
-        className={`lg:hidden fixed top-12 bottom-0 left-0 z-40 bg-gradient-to-b from-gray-900 to-black border-r border-gray-700 flex flex-col transition-all duration-300 ease-in-out ${
-          isSidebarExpanded ? 'w-64' : 'w-12'
-        }`}
+      <aside
+        className={`lg:hidden fixed top-12 bottom-0 left-0 z-40 bg-gradient-to-b from-gray-900 to-black border-r border-gray-700 flex flex-col transition-all duration-300 ease-in-out ${isSidebarExpanded ? 'w-64' : 'w-12'
+          }`}
       >
         {/* Toggle Button */}
         <div className="p-2 border-b border-gray-700">
@@ -255,15 +252,14 @@ const Sidebar = ({ onSidebarToggle }) => {
             className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-200"
             title={isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
           >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              strokeWidth="1.5" 
-              stroke="currentColor" 
-              className={`w-4 h-4 transition-transform duration-300 ease-in-out ${
-                isSidebarExpanded ? 'rotate-180' : 'rotate-0'
-              }`}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+              className={`w-4 h-4 transition-transform duration-300 ease-in-out ${isSidebarExpanded ? 'rotate-180' : 'rotate-0'
+                }`}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="m5.25 4.5 7.5 7.5-7.5 7.5m6-15 7.5 7.5-7.5 7.5" />
             </svg>
@@ -408,7 +404,7 @@ const Sidebar = ({ onSidebarToggle }) => {
                 ))}
               </div>
             </div>
-            
+
           </div>
         )}
       </aside>

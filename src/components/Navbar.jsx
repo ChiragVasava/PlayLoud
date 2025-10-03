@@ -16,17 +16,39 @@ import {
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import authService from '../utils/auth';
+import appwriteAuth from '../utils/appwriteAuth';
 
 const Navbar = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(authService.isLoggedIn());
-  const [currentUser, setCurrentUser] = useState(authService.getCurrentUser());
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const profileRef = useRef(null);
   const searchRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Fetch enhanced user profile data
+  const fetchUserProfile = async () => {
+    if (!authService.isLoggedIn()) {
+      setCurrentUser(null);
+      return;
+    }
+
+    try {
+      setIsLoadingProfile(true);
+      const enhancedUser = await appwriteAuth.getCurrentUser();
+      setCurrentUser(enhancedUser);
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      // Fallback to basic user data
+      setCurrentUser(authService.getCurrentUser());
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -37,10 +59,19 @@ const Navbar = () => {
 
     document.addEventListener('mousedown', handleClickOutside);
 
+    // Initial profile fetch
+    fetchUserProfile();
+
     // Listen to auth state changes
-    const handleAuthChange = () => {
-      setIsLoggedIn(authService.isLoggedIn());
-      setCurrentUser(authService.getCurrentUser());
+    const handleAuthChange = async () => {
+      const loggedIn = authService.isLoggedIn();
+      setIsLoggedIn(loggedIn);
+      
+      if (loggedIn) {
+        await fetchUserProfile();
+      } else {
+        setCurrentUser(null);
+      }
     };
 
     // Listen to storage changes (for cross-component auth updates)
@@ -68,14 +99,19 @@ const Navbar = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     const confirmed = window.confirm('Are you sure you want to logout?');
     if (confirmed) {
-      authService.logout();
-      setIsLoggedIn(false);
-      setCurrentUser(null);
-      setIsProfileOpen(false);
-      console.log('User logged out');
+      try {
+        await authService.logout();
+        setIsLoggedIn(false);
+        setCurrentUser(null);
+        setIsProfileOpen(false);
+        console.log('User logged out');
+        navigate('/login');
+      } catch (error) {
+        console.error('Logout error:', error);
+      }
     }
   };
 
@@ -91,6 +127,22 @@ const Navbar = () => {
     { id: 'premium', label: 'Premium', icon: SparklesIcon, href: '/premium', isPremium: true }
   ];
 
+  // Get user display information
+  const getUserDisplayName = () => {
+    if (!currentUser) return 'User';
+    return currentUser.displayName || currentUser.name || currentUser.email?.split('@')[0] || 'User';
+  };
+
+  const getUserEmail = () => {
+    if (!currentUser) return '';
+    return currentUser.email || '';
+  };
+
+  const getUserAvatar = () => {
+    if (!currentUser) return "https://cdn-icons-png.flaticon.com/128/7153/7153080.png";
+    return currentUser.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png";
+  };
+
   return (
     <nav className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-gray-700 sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
       <div className="max-w-full mx-auto px-3 sm:px-4 lg:px-6">
@@ -98,7 +150,10 @@ const Navbar = () => {
 
           {/* Logo - Compact */}
           <div className="flex-shrink-0 flex items-center">
-            <a href="/" className="flex items-center space-x-2 group">
+            <a
+            onClick={() => navigate('/')} 
+            // href="/" 
+            className="flex items-center space-x-2 group">
               <div className="relative">
                 <div className="w-8 h-8 bg-gradient-to-br from-green-400 to-emerald-500 rounded-lg flex items-center justify-center transform group-hover:scale-110 transition-transform duration-200">
                   <MusicalNoteIcon className="w-4 h-4 text-white" />
@@ -177,11 +232,18 @@ const Navbar = () => {
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center space-x-1.5 p-1 rounded-full hover:bg-gray-700/50 transition-all duration-200 group"
                 >
-                  <img
-                    src={currentUser?.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png"}
-                    alt="Profile"
-                    className="w-7 h-7 rounded-full border-2 border-green-500 group-hover:border-green-400 transition-colors"
-                  />
+                  {isLoadingProfile ? (
+                    <div className="w-7 h-7 rounded-full border-2 border-green-500 border-t-transparent animate-spin"></div>
+                  ) : (
+                    <img
+                      src={getUserAvatar()}
+                      alt="Profile"
+                      className="w-7 h-7 rounded-full border-2 border-green-500 group-hover:border-green-400 transition-colors object-cover"
+                      onError={(e) => {
+                        e.target.src = "https://cdn-icons-png.flaticon.com/128/7153/7153080.png";
+                      }}
+                    />
+                  )}
                   <ChevronDownIcon className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
                 </button>
               ) : (
@@ -201,22 +263,33 @@ const Navbar = () => {
                   <div className="px-3 py-2 border-b border-gray-700">
                     <div className="flex items-center space-x-2">
                       <img
-                        // src={profileData.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png"}
-                        // alt="Profile"
-                        src={currentUser.avatar || "https://cdn-icons-png.flaticon.com/128/7153/7153080.png"}
+                        src={getUserAvatar()}
                         alt="Profile"
-                        className="w-9 h-9 rounded-full border-2 border-green-500"
+                        className="w-9 h-9 rounded-full border-2 border-green-500 object-cover"
+                        onError={(e) => {
+                          e.target.src = "https://cdn-icons-png.flaticon.com/128/7153/7153080.png";
+                        }}
                       />
-                      <div>
-                        <p className="text-white font-medium text-sm">{currentUser?.name || "Username"}</p>
-                        <p className="text-gray-400 text-xs">{currentUser?.email || "UserEmailID"}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white font-medium text-sm truncate">
+                          {getUserDisplayName()}
+                        </p>
+                        <p className="text-gray-400 text-xs truncate">
+                          {getUserEmail()}
+                        </p>
                       </div>
                     </div>
+                    {currentUser?.provider === 'google' && (
+                      <div className="mt-2">
+                        <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">
+                          Google Account
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Menu Items */}
                   <div className="py-1">
-                    {/* <Link to="/profile"> */}
                     <button
                       onClick={() => {
                         navigate('/profile');
@@ -227,7 +300,6 @@ const Navbar = () => {
                       <UserCircleIcon className="w-4 h-4" />
                       <span>Profile</span>
                     </button>
-                    {/* </Link> */}
                     <button
                       onClick={() => {
                         navigate('/settings');

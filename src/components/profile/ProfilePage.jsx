@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusIcon } from '@heroicons/react/24/outline';
 import Button from '../ui/Button';
-import { account, storage, ID, BUCKET_ID } from '../../lib/appwrite';
+import { account, ID, BUCKET_ID } from '../../lib/appwrite';
 import appwriteAuth from '../../utils/appwriteAuth';
 
 import {
@@ -292,7 +292,7 @@ const ProfilePage = ({ onNavigate }) => {
           {/* Profile Info */}
           <div className="flex-1 text-center md:text-left">
             <div className="flex items-center justify-center md:justify-start space-x-3 mb-2">
-              <span className="text-sm font-medium bg-white bg-opacity-20 px-3 py-1 rounded-full">
+              <span className="text-black text-sm font-medium bg-white bg-opacity-20 px-3 py-1 rounded-full">
                 Profile
               </span>
               {user && user.emailVerification && (
@@ -334,8 +334,6 @@ const ProfilePage = ({ onNavigate }) => {
               >
                 <strong>{profileData.totalLikedSongs.toLocaleString()}</strong> Liked Songs
               </button>
-              <span><strong>{profileData.followersCount}</strong> Followers</span>
-              <span><strong>{profileData.followingCount}</strong> Following</span>
             </div>
           </div>
 
