@@ -1,9 +1,11 @@
-// components/pages/PlaylistPage.jsx (FIXED)
+// components/pages/PlaylistPage.jsx (WITH LIKE & PLAYLIST FEATURES)
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { databases, APPWRITE_CONFIG } from '../../lib/appwrite';
-import { Query } from 'appwrite';
+import { databases, APPWRITE_CONFIG, Query, ID } from '../../lib/appwrite';
 import { useMusic } from '../../context/useMusic';
+import { HeartIcon as HeartOutline } from '@heroicons/react/24/outline';
+import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
+import { PlusIcon } from '@heroicons/react/24/outline';
 
 const PlaylistPage = () => {
   const { id } = useParams();
@@ -13,6 +15,17 @@ const PlaylistPage = () => {
   const [songs, setSongs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [likedSongs, setLikedSongs] = useState(new Set());
+  const [showPlaylistMenu, setShowPlaylistMenu] = useState(null);
+  const [userPlaylists, setUserPlaylists] = useState([]);
+  const [isAddingToPlaylist, setIsAddingToPlaylist] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Get current user
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('playloud_user'));
+    setCurrentUser(user);
+  }, []);
 
   useEffect(() => {
     const loadPlaylistData = async () => {
@@ -35,7 +48,8 @@ const PlaylistPage = () => {
           'playlist_songs',
           [
             Query.equal('playlistId', id),
-            Query.orderAsc('order') // ✅ Fixed: Using 'order' instead of 'position'
+            Query.orderAsc('order'),
+            Query.limit(100)
           ]
         );
 
@@ -48,7 +62,6 @@ const PlaylistPage = () => {
               playlistSong.songId
             );
             
-            // ✅ Construct proper song object with audioUrl
             return {
               $id: songResponse.$id,
               title: songResponse.title,
@@ -57,9 +70,8 @@ const PlaylistPage = () => {
               genre: songResponse.genre,
               duration: songResponse.duration,
               coverImage: songResponse.coverImage,
-              // ✅ Add audioUrl for playing
-              audioUrl: `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${songResponse.fileId}/view?project=${APPWRITE_CONFIG.projectId}&mode=admin`,
-              order: playlistSong.order, // ✅ Fixed: Using 'order' instead of 'position'
+              audioUrl: `${APPWRITE_CONFIG.endpoint}/storage/buckets/${APPWRITE_CONFIG.bucketId}/files/${songResponse.fileId}/view?project=${APPWRITE_CONFIG.projectId}`,
+              order: playlistSong.order,
               playlistSongId: playlistSong.$id
             };
           } catch (error) {
@@ -72,6 +84,34 @@ const PlaylistPage = () => {
         const validSongs = songDetails.filter(song => song !== null);
 
         setSongs(validSongs);
+
+        // Fetch user's liked songs if logged in
+        if (currentUser) {
+          try {
+            const likedResponse = await databases.listDocuments(
+              APPWRITE_CONFIG.databaseId,
+              'liked_songs',
+              [Query.equal('userId', currentUser.$id), Query.limit(100)]
+            );
+            
+            const likedIds = new Set(likedResponse.documents.map(doc => doc.songId));
+            setLikedSongs(likedIds);
+          } catch (likedError) {
+            console.error('Error fetching liked songs:', likedError);
+          }
+          
+          // Fetch user playlists for "Add to Playlist" menu
+          try {
+            const playlistsResponse = await databases.listDocuments(
+              APPWRITE_CONFIG.databaseId,
+              'playlists',
+              [Query.equal('userId', currentUser.$id), Query.limit(50)]
+            );
+            setUserPlaylists(playlistsResponse.documents);
+          } catch (playlistError) {
+            console.error('Error fetching user playlists:', playlistError);
+          }
+        }
 
       } catch (error) {
         console.error('Error loading playlist:', error);
@@ -90,17 +130,170 @@ const PlaylistPage = () => {
     if (id) {
       loadPlaylistData();
     }
-  }, [id]);
+    
+    // Close playlist menu when clicking outside
+    const handleClickOutside = (event) => {
+      if (showPlaylistMenu && !event.target.closest('.playlist-menu')) {
+        setShowPlaylistMenu(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+    
+  }, [id, currentUser]);
 
   const handlePlaySong = (song) => {
-    console.log('Playing song:', song.title);
     playSong(song);
   };
 
   const handlePlayAll = () => {
     if (songs.length > 0) {
-      console.log('Playing all songs, starting with:', songs[0].title);
       playSong(songs[0]);
+    }
+  };
+
+  // ❤️ Handle like/unlike toggle
+  const handleToggleLike = async (e, songId) => {
+    e.stopPropagation();
+    
+    if (!currentUser) {
+      alert('Please log in to like songs');
+      navigate('/login');
+      return;
+    }
+    
+    try {
+      const isCurrentlyLiked = likedSongs.has(songId);
+      
+      if (isCurrentlyLiked) {
+        // Unlike
+        const likedDoc = await databases.listDocuments(
+          APPWRITE_CONFIG.databaseId,
+          'liked_songs',
+          [
+            Query.equal('userId', currentUser.$id),
+            Query.equal('songId', songId)
+          ]
+        );
+        
+        if (likedDoc.documents.length > 0) {
+          await databases.deleteDocument(
+            APPWRITE_CONFIG.databaseId,
+            'liked_songs',
+            likedDoc.documents[0].$id
+          );
+          
+          const newLikedSongs = new Set(likedSongs);
+          newLikedSongs.delete(songId);
+          setLikedSongs(newLikedSongs);
+        }
+        
+      } else {
+        // Like
+        await databases.createDocument(
+          APPWRITE_CONFIG.databaseId,
+          'liked_songs',
+          ID.unique(),
+          {
+            userId: currentUser.$id,
+            songId: songId,
+            likedAt: new Date().toISOString()
+          }
+        );
+        
+        const newLikedSongs = new Set(likedSongs);
+        newLikedSongs.add(songId);
+        setLikedSongs(newLikedSongs);
+      }
+      
+    } catch (error) {
+      console.error('Error toggling like status:', error);
+      alert('Failed to update like status');
+    }
+  };
+
+  // ➕ Handle add to playlist
+  const handleAddToPlaylist = async (e, songId, playlistId) => {
+    e.stopPropagation();
+    
+    if (!currentUser) {
+      alert('Please log in to add songs to playlists');
+      navigate('/login');
+      return;
+    }
+    
+    setIsAddingToPlaylist(true);
+    
+    try {
+      // Check if song is already in playlist
+      const existingCheck = await databases.listDocuments(
+        APPWRITE_CONFIG.databaseId,
+        'playlist_songs',
+        [
+          Query.equal('playlistId', playlistId),
+          Query.equal('songId', songId)
+        ]
+      );
+      
+      if (existingCheck.documents.length > 0) {
+        alert('Song is already in this playlist');
+        setIsAddingToPlaylist(false);
+        return;
+      }
+      
+      // Get current highest order number
+      const orderCheck = await databases.listDocuments(
+        APPWRITE_CONFIG.databaseId,
+        'playlist_songs',
+        [
+          Query.equal('playlistId', playlistId),
+          Query.orderDesc('order'),
+          Query.limit(1)
+        ]
+      );
+      
+      const nextOrder = orderCheck.documents.length > 0 
+        ? orderCheck.documents[0].order + 1 
+        : 1;
+      
+      // Add song to playlist
+      await databases.createDocument(
+        APPWRITE_CONFIG.databaseId,
+        'playlist_songs',
+        ID.unique(),
+        {
+          playlistId: playlistId,
+          songId: songId,
+          order: nextOrder,
+          addedAt: new Date().toISOString()
+        }
+      );
+      
+      // Update playlist song count
+      const targetPlaylist = await databases.getDocument(
+        APPWRITE_CONFIG.databaseId,
+        'playlists',
+        playlistId
+      );
+      
+      await databases.updateDocument(
+        APPWRITE_CONFIG.databaseId,
+        'playlists',
+        playlistId,
+        {
+          songCount: (targetPlaylist.songCount || 0) + 1
+        }
+      );
+      
+      alert(`✅ Added to "${targetPlaylist.name}" playlist`);
+      setShowPlaylistMenu(null);
+      
+    } catch (error) {
+      console.error('Error adding song to playlist:', error);
+      alert('Failed to add song to playlist');
+    } finally {
+      setIsAddingToPlaylist(false);
     }
   };
 
@@ -191,12 +384,6 @@ const PlaylistPage = () => {
               <path d="M8 5v14l11-7z"/>
             </svg>
           </button>
-          
-          <button className="w-8 h-8 text-gray-400 hover:text-white transition-colors">
-            <svg className="w-full h-full" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-            </svg>
-          </button>
         </div>
       </section>
 
@@ -215,12 +402,13 @@ const PlaylistPage = () => {
         ) : (
           <div className="bg-black/20 rounded-xl overflow-hidden">
             {/* Header */}
-            <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-4 px-6 py-3 border-b border-gray-800 text-sm text-gray-400 font-medium">
+            <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto_auto] gap-4 px-6 py-3 border-b border-gray-800 text-sm text-gray-400 font-medium">
               <div className="w-8">#</div>
               <div>Title</div>
               <div>Artist</div>
               <div>Album</div>
               <div>Duration</div>
+              <div className="w-24">Actions</div>
             </div>
 
             {/* Songs */}
@@ -228,7 +416,7 @@ const PlaylistPage = () => {
               {songs.map((song, index) => (
                 <div
                   key={song.$id}
-                  className="grid grid-cols-[auto_1fr_1fr_1fr_auto] gap-4 px-6 py-4 hover:bg-gray-800/50 transition-colors group cursor-pointer"
+                  className="grid grid-cols-[auto_1fr_1fr_1fr_auto_auto] gap-4 px-6 py-4 hover:bg-gray-800/50 transition-colors group cursor-pointer"
                   onClick={() => handlePlaySong(song)}
                 >
                   {/* Track Number / Play Button */}
@@ -285,6 +473,85 @@ const PlaylistPage = () => {
                     <span className="text-gray-400 text-sm">
                       {formatDuration(song.duration)}
                     </span>
+                  </div>
+
+                  {/* Actions (Like & Add to Playlist) */}
+                  <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Like Button */}
+                    <button
+                      onClick={(e) => handleToggleLike(e, song.$id)}
+                      className="p-2 hover:bg-gray-600 rounded-full transition-colors"
+                      title={likedSongs.has(song.$id) ? "Unlike" : "Like"}
+                    >
+                      {likedSongs.has(song.$id) ? (
+                        <HeartSolid className="w-5 h-5 text-red-500" />
+                      ) : (
+                        <HeartOutline className="w-5 h-5 text-gray-400 hover:text-white" />
+                      )}
+                    </button>
+                    
+                    {/* Add to Playlist Button */}
+                    <div className="relative playlist-menu">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowPlaylistMenu(showPlaylistMenu === song.$id ? null : song.$id);
+                        }}
+                        className="p-2 hover:bg-gray-600 rounded-full transition-colors"
+                        title="Add to playlist"
+                      >
+                        <PlusIcon className="w-5 h-5 text-gray-400 hover:text-white" />
+                      </button>
+                      
+                      {/* Playlist Menu */}
+                      {showPlaylistMenu === song.$id && (
+                        <div className="absolute right-0 mt-2 w-64 bg-gray-800 rounded-lg shadow-lg border border-gray-700 z-20 py-2">
+                          <div className="px-4 py-2 border-b border-gray-700">
+                            <h4 className="text-sm font-semibold text-white">Add to Playlist</h4>
+                          </div>
+                          
+                          {isAddingToPlaylist ? (
+                            <div className="px-4 py-3 text-center">
+                              <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                            </div>
+                          ) : userPlaylists.length > 0 ? (
+                            <div className="max-h-64 overflow-y-auto">
+                              {userPlaylists.map(playlist => (
+                                <button
+                                  key={playlist.$id}
+                                  onClick={(e) => handleAddToPlaylist(e, song.$id, playlist.$id)}
+                                  className="w-full text-left px-4 py-2 text-sm text-white hover:bg-gray-700 transition-colors flex items-center"
+                                >
+                                  <div className="w-8 h-8 bg-gray-700 rounded-md flex items-center justify-center mr-2">
+                                    <svg className="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 24 24">
+                                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                                    </svg>
+                                  </div>
+                                  <div className="overflow-hidden">
+                                    <p className="truncate">{playlist.name}</p>
+                                    <p className="text-xs text-gray-400">{playlist.songCount || 0} songs</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="px-4 py-3 text-center text-gray-400 text-sm">
+                              <p>No playlists available</p>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowPlaylistMenu(null);
+                                  navigate('/create-playlist');
+                                }}
+                                className="mt-2 text-green-400 hover:underline"
+                              >
+                                Create Playlist
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

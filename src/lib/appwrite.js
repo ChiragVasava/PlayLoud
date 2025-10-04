@@ -1,5 +1,5 @@
 // src/lib/appwrite.js (UPDATED)
-import { Client, Account, OAuthProvider, ID, Storage, Databases } from 'appwrite';
+import { Client, Account, OAuthProvider, ID, Storage, Databases, Query } from 'appwrite';
 
 // Create Appwrite client
 export const client = new Client()
@@ -16,7 +16,7 @@ export const storage = new Storage(client);
 export const databases = new Databases(client);
 
 // Export constants
-export { ID, OAuthProvider };
+export { ID, OAuthProvider, Query };
 
 // Environment variables
 export const APPWRITE_CONFIG = {
@@ -32,7 +32,8 @@ export const COLLECTIONS = {
     SONGS: 'songs',
     PLAYLISTS: 'playlists',
     PLAYLIST_SONGS: 'playlist_songs',
-    LIKED_SONGS: 'liked_songs'
+    LIKED_SONGS: 'liked_songs',
+    RECENTLY_PLAYED: 'recently_played'
 };
 
 export const BUCKET_ID = '68b0a1aa0028885b31e0';

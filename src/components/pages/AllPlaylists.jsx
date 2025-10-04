@@ -1,8 +1,9 @@
-// components/pages/AllPlaylists.jsx
-import React, { useState } from 'react';
+// components/pages/AllPlaylists.jsx (REAL DATA FROM APPWRITE)
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { databases, APPWRITE_CONFIG, Query } from '../../lib/appwrite';
 import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
-import { PlayIcon, EllipsisHorizontalIcon, HeartIcon } from '@heroicons/react/24/solid';
+import { PlayIcon, UserGroupIcon, LockClosedIcon } from '@heroicons/react/24/solid';
 import Button from '../ui/Button';
 
 const AllPlaylists = () => {
@@ -10,135 +11,133 @@ const AllPlaylists = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [sortBy, setSortBy] = useState('recent');
+  const [userPlaylists, setUserPlaylists] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
 
-  // Mock data - replace with actual data from your backend/state management
-  const [userPlaylists, setUserPlaylists] = useState([
-    {
-      id: 1,
-      name: 'My Favorites',
-      songs: 45,
-      isPublic: true,
-      createdAt: '2024-01-15',
-      lastPlayed: '2024-09-20',
-      coverImage: null,
-      description: 'My all-time favorite songs',
-      duration: '2h 34m'
-    },
-    {
-      id: 2,
-      name: 'Workout Mix',
-      songs: 32,
-      isPublic: false,
-      createdAt: '2024-02-10',
-      lastPlayed: '2024-09-22',
-      coverImage: null,
-      description: 'High energy songs for gym sessions',
-      duration: '1h 47m'
-    },
-    {
-      id: 3,
-      name: 'Chill Vibes',
-      songs: 28,
-      isPublic: true,
-      createdAt: '2024-03-05',
-      lastPlayed: '2024-09-18',
-      coverImage: null,
-      description: 'Relaxing music for peaceful moments',
-      duration: '1h 52m'
-    },
-    {
-      id: 4,
-      name: 'Road Trip Hits',
-      songs: 67,
-      isPublic: false,
-      createdAt: '2024-01-28',
-      lastPlayed: '2024-09-15',
-      coverImage: null,
-      description: 'Perfect songs for long drives',
-      duration: '3h 21m'
-    },
-    {
-      id: 5,
-      name: 'Study Focus',
-      songs: 23,
-      isPublic: true,
-      createdAt: '2024-04-12',
-      lastPlayed: '2024-09-21',
-      coverImage: null,
-      description: 'Instrumental and ambient tracks',
-      duration: '1h 15m'
-    },
-    {
-      id: 6,
-      name: 'Party Anthems',
-      songs: 41,
-      isPublic: false,
-      createdAt: '2024-02-22',
-      lastPlayed: '2024-09-19',
-      coverImage: null,
-      description: 'Get the party started with these bangers',
-      duration: '2h 8m'
+  // Get current user
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('playloud_user'));
+    if (!user) {
+      navigate('/login');
+      return;
     }
-  ]);
+    setCurrentUser(user);
+  }, [navigate]);
+
+  // Fetch all user playlists
+  useEffect(() => {
+    const loadPlaylists = async () => {
+      if (!currentUser) return;
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Fetch all user's playlists
+        const playlistsResponse = await databases.listDocuments(
+          APPWRITE_CONFIG.databaseId,
+          'playlists',
+          [
+            Query.equal('userId', currentUser.$id),
+            Query.orderDesc('$updatedAt'),
+            Query.limit(100)
+          ]
+        );
+
+        setUserPlaylists(playlistsResponse.documents);
+        console.log(`✅ Loaded ${playlistsResponse.documents.length} playlists`);
+
+      } catch (error) {
+        console.error('Error loading playlists:', error);
+        setError('Failed to load playlists');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPlaylists();
+  }, [currentUser]);
 
   // Filter and sort playlists
   const filteredPlaylists = userPlaylists
     .filter(playlist => {
       const matchesSearch = playlist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           playlist.description.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFilter = selectedFilter === 'all' || 
-                           (selectedFilter === 'public' && playlist.isPublic) ||
-                           (selectedFilter === 'private' && !playlist.isPublic);
-      
+        (playlist.description && playlist.description.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      const matchesFilter = selectedFilter === 'all' ||
+        (selectedFilter === 'public' && playlist.isPublic) ||
+        (selectedFilter === 'private' && !playlist.isPublic);
+
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
       switch (sortBy) {
         case 'recent':
-          return new Date(b.lastPlayed) - new Date(a.lastPlayed);
+          return new Date(b.$updatedAt) - new Date(a.$updatedAt);
         case 'alphabetical':
           return a.name.localeCompare(b.name);
         case 'created':
-          return new Date(b.createdAt) - new Date(a.createdAt);
+          return new Date(b.$createdAt) - new Date(a.$createdAt);
         case 'songs':
-          return b.songs - a.songs;
+          return (b.songCount || 0) - (a.songCount || 0);
         default:
           return 0;
       }
     });
 
   const handlePlayPlaylist = (playlistId) => {
-    console.log('Playing playlist:', playlistId);
-    // Add your play logic here
+    navigate(`/playlist/${playlistId}`);
   };
 
   const handleEditPlaylist = (playlistId) => {
     navigate(`/playlist/${playlistId}/edit`);
   };
 
-  const handleDeletePlaylist = (playlistId) => {
+  const handleDeletePlaylist = async (playlistId) => {
     if (window.confirm('Are you sure you want to delete this playlist?')) {
-      setUserPlaylists(prev => prev.filter(p => p.id !== playlistId));
+      try {
+        await databases.deleteDocument(
+          APPWRITE_CONFIG.databaseId,
+          'playlists',
+          playlistId
+        );
+        setUserPlaylists(prev => prev.filter(p => p.$id !== playlistId));
+        console.log('✅ Playlist deleted');
+      } catch (error) {
+        console.error('Error deleting playlist:', error);
+        alert('Failed to delete playlist');
+      }
     }
+  };
+
+  const formatDuration = (seconds) => {
+    if (!seconds) return "0m";
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
   };
 
   const PlaylistCard = ({ playlist }) => (
     <div className="group bg-gray-800/40 hover:bg-gray-800/60 rounded-xl p-4 transition-all duration-300 hover:scale-105 cursor-pointer border border-gray-700/50 hover:border-gray-600/50">
       <div className="relative mb-4">
         {/* Playlist Cover */}
-        <div 
+        <div
           className="w-full aspect-square bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mb-3 overflow-hidden"
-          onClick={() => navigate(`/playlist/${playlist.id}`)}
+          onClick={() => handlePlayPlaylist(playlist.$id)}
         >
           {playlist.coverImage ? (
-            <img 
-              src={playlist.coverImage} 
+            <img
+              src={playlist.coverImage}
               alt={playlist.name}
               className="w-full h-full object-cover"
             />
           ) : (
-            <svg className="w-12 h-12 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-12 h-12 text-white/80" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
             </svg>
           )}
@@ -148,7 +147,7 @@ const AllPlaylists = () => {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handlePlayPlaylist(playlist.id);
+            handlePlayPlaylist(playlist.$id);
           }}
           className="absolute bottom-2 right-2 w-12 h-12 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:scale-110"
         >
@@ -159,72 +158,71 @@ const AllPlaylists = () => {
       {/* Playlist Info */}
       <div className="space-y-2">
         <div className="flex items-start justify-between">
-          <h3 
+          <h3
             className="font-bold text-white text-lg truncate cursor-pointer hover:underline"
-            onClick={() => navigate(`/playlist/${playlist.id}`)}
+            onClick={() => handlePlayPlaylist(playlist.$id)}
           >
             {playlist.name}
           </h3>
-          
-          {/* Options Menu */}
-          <div className="relative group/menu">
-            <button className="text-gray-400 hover:text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-              <EllipsisHorizontalIcon className="w-5 h-5" />
-            </button>
-            
-            {/* Dropdown Menu */}
-            <div className="absolute right-0 top-8 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-2 min-w-48 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all duration-200 z-10">
-              <button
-                onClick={() => handlePlayPlaylist(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                Play
-              </button>
-              <button
-                onClick={() => navigate(`/playlist/${playlist.id}`)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                View Playlist
-              </button>
-              <button
-                onClick={() => handleEditPlaylist(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                Edit Details
-              </button>
-              <hr className="border-gray-700 my-1" />
-              <button
-                onClick={() => handleDeletePlaylist(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-gray-700 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
         </div>
 
         <p className="text-gray-400 text-sm line-clamp-2">
-          {playlist.description}
+          {playlist.description || 'No description'}
         </p>
 
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{playlist.songs} songs</span>
-          <span>{playlist.duration}</span>
+          <span>{playlist.songCount || 0} songs</span>
+          {playlist.totalDuration && <span>{formatDuration(playlist.totalDuration)}</span>}
         </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 text-xs text-gray-500">
-            <span className={`px-2 py-1 rounded-full ${playlist.isPublic ? 'bg-green-500/20 text-green-400' : 'bg-gray-600/50 text-gray-400'}`}>
-              {playlist.isPublic ? 'Public' : 'Private'}
+            <span className={`px-2 py-1 rounded-full flex items-center space-x-1 ${playlist.isPublic
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-gray-600/50 text-gray-400'
+              }`}>
+              {playlist.isPublic ? (
+                <UserGroupIcon className="w-3 h-3" />
+              ) : (
+                <LockClosedIcon className="w-3 h-3" />
+              )}
+              <span>{playlist.isPublic ? 'Public' : 'Private'}</span>
             </span>
           </div>
           <span className="text-xs text-gray-500">
-            Last played {new Date(playlist.lastPlayed).toLocaleDateString()}
+            {new Date(playlist.$updatedAt).toLocaleDateString()}
           </span>
         </div>
       </div>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading playlists...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white">
@@ -234,11 +232,11 @@ const AllPlaylists = () => {
           <div>
             <h1 className="text-4xl font-bold mb-2">Your Playlists</h1>
             <p className="text-gray-400">
-              {filteredPlaylists.length} playlist{filteredPlaylists.length !== 1 ? 's' : ''} • 
-              {userPlaylists.reduce((total, playlist) => total + playlist.songs, 0)} total songs
+              {filteredPlaylists.length} playlist{filteredPlaylists.length !== 1 ? 's' : ''} •
+              {userPlaylists.reduce((total, playlist) => total + (playlist.songCount || 0), 0)} total songs
             </p>
           </div>
-          
+
           <Button
             onClick={() => navigate('/create-playlist')}
             variant="primary"
@@ -281,7 +279,7 @@ const AllPlaylists = () => {
               onChange={(e) => setSortBy(e.target.value)}
               className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
             >
-              <option value="recent">Recently Played</option>
+              <option value="recent">Recently Updated</option>
               <option value="alphabetical">A-Z</option>
               <option value="created">Recently Created</option>
               <option value="songs">Most Songs</option>
@@ -294,7 +292,7 @@ const AllPlaylists = () => {
       {filteredPlaylists.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
           {filteredPlaylists.map((playlist) => (
-            <PlaylistCard key={playlist.id} playlist={playlist} />
+            <PlaylistCard key={playlist.$id} playlist={playlist} />
           ))}
         </div>
       ) : (
@@ -308,7 +306,7 @@ const AllPlaylists = () => {
             {searchTerm ? 'No playlists found' : 'No playlists yet'}
           </h3>
           <p className="text-gray-500 mb-6">
-            {searchTerm 
+            {searchTerm
               ? 'Try adjusting your search or filters'
               : 'Create your first playlist to get started'
             }
@@ -336,7 +334,7 @@ const AllPlaylists = () => {
             </div>
             <div className="text-center">
               <h3 className="text-2xl font-bold text-blue-400">
-                {userPlaylists.reduce((total, playlist) => total + playlist.songs, 0)}
+                {userPlaylists.reduce((total, playlist) => total + (playlist.songCount || 0), 0)}
               </h3>
               <p className="text-gray-400">Total Songs</p>
             </div>

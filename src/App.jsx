@@ -6,7 +6,6 @@ import Sidebar from './components/Sidebar';
 import HomePage from './components/HomePage';
 import SearchPage from './components/pages/SearchPage';
 import PlaylistPage from './components/pages/PlaylistPage';
-import SongPage from './components/pages/SongPage';
 import MusicPlayer from './components/MusicPlayer';
 import Footer from './components/Footer';
 import LoginForm from './components/auth/LoginForm';
@@ -181,7 +180,6 @@ const App = () => {
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/genre/:genre" element={<GenreRedirect />} />
                 <Route path="/playlist/:id" element={<PlaylistPage />} />
-                <Route path="/song/:id" element={<SongPage />} />
                 
                 {/* Routes that require authentication */}
                 {isAuthenticated ? (

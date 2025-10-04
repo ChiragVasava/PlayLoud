@@ -1,6 +1,7 @@
-// components/pages/Library.jsx
-import React, { useState } from 'react';
+// components/pages/Library.jsx (REAL DATA FROM APPWRITE)
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { databases, APPWRITE_CONFIG, Query } from '../../lib/appwrite';
 import {
   PlusIcon,
   HeartIcon,
@@ -18,89 +19,76 @@ const Library = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [sortBy, setSortBy] = useState('recent');
-  // const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [userPlaylists, setUserPlaylists] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [likedSongsCount, setLikedSongsCount] = useState(0);
 
-  // Mock library data with enhanced details
-  const [userPlaylists, setUserPlaylists] = useState([
-    {
-      id: 1,
-      name: 'My Favorites',
-      songs: 45,
-      isPublic: true,
-      createdAt: '2024-01-15',
-      lastPlayed: '2024-09-20',
-      coverImage: null,
-      description: 'My all-time favorite songs',
-      duration: '2h 34m',
-      color: 'from-purple-500 to-pink-500'
-    },
-    {
-      id: 2,
-      name: 'Workout Mix',
-      songs: 32,
-      isPublic: false,
-      createdAt: '2024-02-10',
-      lastPlayed: '2024-09-22',
-      coverImage: null,
-      description: 'High energy songs for gym sessions',
-      duration: '1h 47m',
-      color: 'from-red-500 to-orange-500'
-    },
-    {
-      id: 3,
-      name: 'Chill Vibes',
-      songs: 28,
-      isPublic: true,
-      createdAt: '2024-03-05',
-      lastPlayed: '2024-09-18',
-      coverImage: null,
-      description: 'Relaxing music for peaceful moments',
-      duration: '1h 52m',
-      color: 'from-blue-500 to-cyan-500'
-    },
-    {
-      id: 4,
-      name: 'Road Trip Hits',
-      songs: 67,
-      isPublic: false,
-      createdAt: '2024-01-28',
-      lastPlayed: '2024-09-15',
-      coverImage: null,
-      description: 'Perfect songs for long drives',
-      duration: '3h 21m',
-      color: 'from-green-500 to-teal-500'
-    },
-    {
-      id: 5,
-      name: 'Study Focus',
-      songs: 23,
-      isPublic: true,
-      createdAt: '2024-04-12',
-      lastPlayed: '2024-09-21',
-      coverImage: null,
-      description: 'Instrumental and ambient tracks',
-      duration: '1h 15m',
-      color: 'from-indigo-500 to-purple-500'
-    },
-    {
-      id: 6,
-      name: 'Party Anthems',
-      songs: 41,
-      isPublic: false,
-      createdAt: '2024-02-22',
-      lastPlayed: '2024-09-19',
-      coverImage: null,
-      description: 'Get the party started with these bangers',
-      duration: '2h 8m',
-      color: 'from-pink-500 to-red-500'
+  // Get current user
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('playloud_user'));
+    if (!user) {
+      navigate('/login');
+      return;
     }
-  ]);
+    setCurrentUser(user);
+  }, [navigate]);
+
+  // Fetch user's playlists
+  useEffect(() => {
+    const loadLibrary = async () => {
+      if (!currentUser) return;
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        // Fetch user's playlists
+        const playlistsResponse = await databases.listDocuments(
+          APPWRITE_CONFIG.databaseId,
+          'playlists',
+          [
+            Query.equal('userId', currentUser.$id),
+            Query.orderDesc('$updatedAt'),
+            Query.limit(50)
+          ]
+        );
+
+        setUserPlaylists(playlistsResponse.documents);
+        console.log(`✅ Loaded ${playlistsResponse.documents.length} playlists`);
+
+        // Fetch liked songs count
+        try {
+          const likedResponse = await databases.listDocuments(
+            APPWRITE_CONFIG.databaseId,
+            'liked_songs',
+            [
+              Query.equal('userId', currentUser.$id),
+              Query.limit(1000)
+            ]
+          );
+          setLikedSongsCount(likedResponse.total || likedResponse.documents.length);
+        } catch (likedError) {
+          console.error('Error fetching liked songs count:', likedError);
+        }
+
+      } catch (error) {
+        console.error('Error loading library:', error);
+        setError('Failed to load library');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadLibrary();
+  }, [currentUser]);
 
   // Filter and sort playlists
   const filteredPlaylists = userPlaylists
     .filter(playlist => {
       const matchesSearch = playlist.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        playlist.description.toLowerCase().includes(searchTerm.toLowerCase());
+        (playlist.description && playlist.description.toLowerCase().includes(searchTerm.toLowerCase()));
 
       const matchesFilter = selectedFilter === 'all' ||
         (selectedFilter === 'public' && playlist.isPublic) ||
@@ -111,48 +99,43 @@ const Library = () => {
     .sort((a, b) => {
       switch (sortBy) {
         case 'recent':
-          return new Date(b.lastPlayed) - new Date(a.lastPlayed);
+          return new Date(b.$updatedAt) - new Date(a.$updatedAt);
         case 'alphabetical':
           return a.name.localeCompare(b.name);
         case 'created':
-          return new Date(b.createdAt) - new Date(a.createdAt);
+          return new Date(b.$createdAt) - new Date(a.$createdAt);
         case 'songs':
-          return b.songs - a.songs;
+          return (b.songCount || 0) - (a.songCount || 0);
         default:
           return 0;
       }
     });
 
+  const handlePlayPlaylist = (playlistId) => {
+    navigate(`/playlist/${playlistId}`);
+  };
+
   const handleCreatePlaylist = () => {
     navigate('/create-playlist');
   };
 
-  const handlePlaylistClick = (playlistId) => {
-    navigate(`/playlist/${playlistId}`);
-  };
-
-  const handlePlayPlaylist = (playlistId) => {
-    console.log('Playing playlist:', playlistId);
-    // Add your play logic here
-  };
-
-  const handleEditPlaylist = (playlistId) => {
-    navigate(`/playlist/${playlistId}/edit`);
-  };
-
-  const handleDeletePlaylist = (playlistId) => {
-    if (window.confirm('Are you sure you want to delete this playlist?')) {
-      setUserPlaylists(prev => prev.filter(p => p.id !== playlistId));
-    }
-  };
+  // const formatDuration = (seconds) => {
+  //   if (!seconds) return "0m";
+  //   const hours = Math.floor(seconds / 3600);
+  //   const minutes = Math.floor((seconds % 3600) / 60);
+  //   if (hours > 0) {
+  //     return `${hours}h ${minutes}m`;
+  //   }
+  //   return `${minutes}m`;
+  // };
 
   const PlaylistCard = ({ playlist }) => (
     <div className="group bg-gray-800/40 hover:bg-gray-800/60 rounded-xl p-4 transition-all duration-300 hover:scale-105 cursor-pointer border border-gray-700/50 hover:border-gray-600/50">
       <div className="relative mb-4">
         {/* Playlist Cover */}
         <div
-          className={`w-full aspect-square bg-gradient-to-br ${playlist.color} rounded-lg flex items-center justify-center mb-3 overflow-hidden`}
-          onClick={() => handlePlaylistClick(playlist.id)}
+          className="w-full aspect-square bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mb-3 overflow-hidden"
+          onClick={() => handlePlayPlaylist(playlist.$id)}
         >
           {playlist.coverImage ? (
             <img
@@ -171,7 +154,7 @@ const Library = () => {
         <button
           onClick={(e) => {
             e.stopPropagation();
-            handlePlayPlaylist(playlist.id);
+            handlePlayPlaylist(playlist.$id);
           }}
           className="absolute bottom-2 right-2 w-12 h-12 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 shadow-lg hover:scale-110"
         >
@@ -184,62 +167,26 @@ const Library = () => {
         <div className="flex items-start justify-between">
           <h3
             className="font-bold text-white text-lg truncate cursor-pointer hover:underline"
-            onClick={() => handlePlaylistClick(playlist.id)}
+            onClick={() => handlePlayPlaylist(playlist.$id)}
           >
             {playlist.name}
           </h3>
-
-          {/* Options Menu */}
-          <div className="relative group/menu">
-            <button className="text-gray-400 hover:text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-              <EllipsisHorizontalIcon className="w-5 h-5" />
-            </button>
-
-            {/* Dropdown Menu */}
-            <div className="absolute right-0 top-8 bg-gray-800 border border-gray-700 rounded-lg shadow-lg py-2 min-w-48 opacity-0 invisible group-hover/menu:opacity-100 group-hover/menu:visible transition-all duration-200 z-10">
-              <button
-                onClick={() => handlePlayPlaylist(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                Play
-              </button>
-              <button
-                onClick={() => handlePlaylistClick(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                View Playlist
-              </button>
-              <button
-                onClick={() => handleEditPlaylist(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
-              >
-                Edit Details
-              </button>
-              <hr className="border-gray-700 my-1" />
-              <button
-                onClick={() => handleDeletePlaylist(playlist.id)}
-                className="w-full text-left px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-gray-700 transition-colors"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
         </div>
 
         <p className="text-gray-400 text-sm line-clamp-2">
-          {playlist.description}
+          {playlist.description || 'No description'}
         </p>
 
         <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{playlist.songs} songs</span>
-          <span>{playlist.duration}</span>
+          {/* <span>{playlist.songCount || 0} songs</span> */}
+          {/* {playlist.totalDuration && <span>{formatDuration(playlist.totalDuration)}</span>} */}
         </div>
 
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 text-xs text-gray-500">
             <span className={`px-2 py-1 rounded-full flex items-center space-x-1 ${playlist.isPublic
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-gray-600/50 text-gray-400'
+              ? 'bg-green-500/20 text-green-400'
+              : 'bg-gray-600/50 text-gray-400'
               }`}>
               {playlist.isPublic ? (
                 <UserGroupIcon className="w-3 h-3" />
@@ -249,13 +196,37 @@ const Library = () => {
               <span>{playlist.isPublic ? 'Public' : 'Private'}</span>
             </span>
           </div>
-          <span className="text-xs text-gray-500">
-            {new Date(playlist.lastPlayed).toLocaleDateString()}
-          </span>
         </div>
       </div>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading your library...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 via-gray-900 to-black text-white space-y-8">
@@ -264,8 +235,7 @@ const Library = () => {
         <div>
           <h1 className="text-4xl font-bold text-white mb-2">Your Library</h1>
           <p className="text-gray-400">
-            {filteredPlaylists.length} playlist{filteredPlaylists.length !== 1 ? 's' : ''} •
-            {userPlaylists.reduce((total, playlist) => total + playlist.songs, 0)} total songs
+            {filteredPlaylists.length} playlist{filteredPlaylists.length !== 1 ? 's' : ''}
           </p>
         </div>
 
@@ -293,7 +263,7 @@ const Library = () => {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white group-hover:text-green-400 transition-colors">Liked Songs</h3>
-              <p className="text-gray-400">1,247 songs</p>
+              <p className="text-gray-400">{likedSongsCount} songs</p>
             </div>
           </div>
         </div>
@@ -357,7 +327,7 @@ const Library = () => {
               onChange={(e) => setSortBy(e.target.value)}
               className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-green-500"
             >
-              <option value="recent">Recently Played</option>
+              <option value="recent">Recently Updated</option>
               <option value="alphabetical">A-Z</option>
               <option value="created">Recently Created</option>
               <option value="songs">Most Songs</option>
@@ -370,7 +340,7 @@ const Library = () => {
       {filteredPlaylists.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
           {filteredPlaylists.map((playlist) => (
-            <PlaylistCard key={playlist.id} playlist={playlist} />
+            <PlaylistCard key={playlist.$id} playlist={playlist} />
           ))}
         </div>
       ) : (
@@ -412,7 +382,7 @@ const Library = () => {
             </div>
             <div className="text-center">
               <h3 className="text-2xl font-bold text-blue-400">
-                {userPlaylists.reduce((total, playlist) => total + playlist.songs, 0)}
+                {userPlaylists.reduce((total, playlist) => total + (playlist.songCount || 0), 0)}
               </h3>
               <p className="text-gray-400">Total Songs</p>
             </div>
