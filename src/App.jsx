@@ -1,5 +1,6 @@
 // App.jsx (updated with Combined Search and Browse)
 import React, { useEffect } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
@@ -110,6 +111,7 @@ const App = () => {
         </main>
         <div className="fixed bottom-0 left-0 right-0 z-50">
           <MusicPlayer />
+          <SpeedInsights />
         </div>
         <Footer />
       </div>
