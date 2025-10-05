@@ -1,5 +1,5 @@
 // utils/auth.js
-import { account, ID } from '../lib/appwrite';
+import { account, ID, OAuthProvider } from '../lib/appwrite';
 
 class AuthService {
   constructor() {
@@ -25,6 +25,7 @@ class AuthService {
       this.isInitialized = true;
     }
   }
+
 
   // Login method
   async login(email, password) {
@@ -71,6 +72,23 @@ class AuthService {
       throw new Error(this.getErrorMessage(error));
     }
   }
+
+  // ✅ ADD THIS NEW METHOD
+  async loginWithOAuth2(provider) {
+    try {
+      const currentDomain = window.location.origin;
+      // This single line handles the redirect to Google
+      account.createOAuth2Session(
+        provider,
+        `${currentDomain}/auth/success`, // Redirect here on success
+        `${currentDomain}/auth/failure`  // Redirect here on failure
+      );
+    } catch (error) {
+      console.error('OAuth2 login failed:', error);
+      throw new Error('Failed to initiate Google login.');
+    }
+  }
+
 
   // Logout method
   async logout() {
