@@ -10,7 +10,28 @@ const { Client, Databases, ID, Query } = require('node-appwrite');
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+// app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+
+
+const allowedOrigins = [
+    'http://localhost:5173', // Your local frontend
+    'https://play-loud-azure.vercel.app' // Your Vercel frontend
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    }
+}));
+
+
+
 
 // Razorpay config
 const razorpay = new Razorpay({
@@ -36,13 +57,13 @@ const PLAN_DAYS = { monthly: 30, quarterly: 90, 'half-yearly': 180 };
 app.post('/create-order', async (req, res) => {
     try {
         const { amount, currency, planId, planName, userId } = req.body;
-        
+
         console.log('📝 Create order request:', { amount, currency, planId, planName, userId });
-        
+
         if (!amount || !currency) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Amount and currency required' 
+            return res.status(400).json({
+                success: false,
+                error: 'Amount and currency required'
             });
         }
 
@@ -55,11 +76,11 @@ app.post('/create-order', async (req, res) => {
 
         console.log('✅ Order created:', order.id);
 
-        return res.json({ 
-            success: true, 
-            orderId: order.id, 
-            amount: order.amount, 
-            currency: order.currency 
+        return res.json({
+            success: true,
+            orderId: order.id,
+            amount: order.amount,
+            currency: order.currency
         });
     } catch (err) {
         console.error('❌ create-order error:', err);
@@ -80,11 +101,11 @@ app.post('/verify-payment', async (req, res) => {
             userId
         } = req.body;
 
-        console.log('🔍 Verify payment request:', { 
-            razorpay_order_id, 
-            razorpay_payment_id, 
-            planId, 
-            userId 
+        console.log('🔍 Verify payment request:', {
+            razorpay_order_id,
+            razorpay_payment_id,
+            planId,
+            userId
         });
 
         // Verify signature
@@ -114,14 +135,14 @@ app.post('/verify-payment', async (req, res) => {
         if (userId) {
             try {
                 const existing = await databases.listDocuments(
-                    DB_ID, 
+                    DB_ID,
                     SUBS_COLL,
                     [
                         Query.equal('userId', userId),
                         Query.equal('status', 'active')
                     ]
                 );
-                
+
                 if (existing.documents.length > 0) {
                     existingSubscription = existing.documents[0];
                     console.log('ℹ️ User already has active subscription:', existingSubscription.$id);
@@ -134,9 +155,9 @@ app.post('/verify-payment', async (req, res) => {
         // Create payment record
         try {
             const paymentDoc = await databases.createDocument(
-                DB_ID, 
-                PAY_COLL, 
-                ID.unique(), 
+                DB_ID,
+                PAY_COLL,
+                ID.unique(),
                 {
                     userId: userId || 'guest',
                     planId,
@@ -175,9 +196,9 @@ app.post('/verify-payment', async (req, res) => {
             } else {
                 // Create new subscription
                 const subDoc = await databases.createDocument(
-                    DB_ID, 
-                    SUBS_COLL, 
-                    ID.unique(), 
+                    DB_ID,
+                    SUBS_COLL,
+                    ID.unique(),
                     {
                         userId: userId || 'guest',
                         planId,
@@ -196,9 +217,9 @@ app.post('/verify-payment', async (req, res) => {
             console.error('Full error:', e);
         }
 
-        return res.json({ 
-            success: true, 
-            message: 'Payment verified and subscription activated' 
+        return res.json({
+            success: true,
+            message: 'Payment verified and subscription activated'
         });
     } catch (err) {
         console.error('❌ verify-payment error:', err);
@@ -211,7 +232,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
     try {
         const signature = req.headers['x-razorpay-signature'];
         const webhookSecret = process.env.WEBHOOK_SECRET || '';
-        
+
         if (!webhookSecret) {
             console.warn('⚠️ WEBHOOK_SECRET not configured');
             return res.json({ status: 'ok', message: 'webhook secret not configured' });
@@ -221,7 +242,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
             .createHmac('sha256', webhookSecret)
             .update(req.body)
             .digest('hex');
-            
+
         if (expected !== signature) {
             console.error('❌ Invalid webhook signature');
             return res.status(400).json({ error: 'Invalid signature' });
@@ -231,7 +252,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
         console.log('📨 Webhook received:', event.event);
 
         // Handle different webhook events
-        switch(event.event) {
+        switch (event.event) {
             case 'payment.captured':
                 console.log('💰 Payment captured:', event.payload.payment.entity.id);
                 break;
@@ -271,8 +292,8 @@ app.get('/', (req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running and listening on 0.0.0.0:${PORT}`);
     console.log(`📝 Environment check:`);
     console.log(`   ✅ Razorpay Key ID: ${process.env.RAZORPAY_KEY_ID ? 'Configured' : '❌ Missing'}`);
     console.log(`   ✅ Razorpay Key Secret: ${process.env.RAZORPAY_KEY_SECRET ? 'Configured' : '❌ Missing'}`);
@@ -285,4 +306,3 @@ app.listen(PORT, () => {
     console.log(``);
     console.log(`Ready to accept payments! 💳`);
 });
-
